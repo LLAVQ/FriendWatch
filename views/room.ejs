@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>FriendWatch Room</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet" />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body class="dark">
+    <div class="container">
+      <header class="header">
+        <h1>FriendWatch</h1>
+        <p>Room ID: <code><%= roomId %></code></p>
+        <p class="share-link">
+          Share this link with a friend:
+          <input
+            type="text"
+            readonly
+            value="<%= 'http://localhost:3000/room/' + roomId %>"
+            onclick="this.select()"
+          />
+        </p>
+      </header>
+
+      <section class="player-section">
+        <div class="art-wrapper" id="art-wrapper">
+          <img src="<%= artPath %>" alt="Cover art" class="cover-art" />
+          <button id="start-as-host" class="btn-primary">I'm the host</button>
+          <button id="start-as-guest" class="btn-secondary">I'm joining</button>
+        </div>
+
+        <video
+          id="video"
+          class="video-js vjs-big-play-centered vjs-theme-city"
+          controls
+          preload="auto"
+          width="960"
+          height="540"
+          poster="<%= artPath %>"
+          data-setup="{}"
+        >
+          <source src="<%= videoPath %>" type="video/mp4" />
+          <% if (subtitlePath) { %>
+          <track
+            kind="subtitles"
+            src="<%= subtitlePath %>"
+            srclang="en"
+            label="Subtitles"
+            default
+          />
+          <% } %>
+        </video>
+
+        <p id="status" class="status">Waiting to join room…</p>
+      </section>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
+    <script>
+      const roomId = "<%= roomId %>";
+      const videoPath = "<%= videoPath %>";
+
+      const socket = io();
+      const statusEl = document.getElementById('status');
+      const artWrapper = document.getElementById('art-wrapper');
+      const startAsHostBtn = document.getElementById('start-as-host');
+      const startAsGuestBtn = document.getElementById('start-as-guest');
+
+      const player = videojs('video', {
+        controls: true,
+        autoplay: false,
+        preload: 'auto',
+      });
+
+      let role = null;
+      let isSeekingFromRemote = false;
+
+      function setStatus(text) {
+        statusEl.textContent = text;
+      }
+
+      function hideArt() {
+        artWrapper.style.display = 'none';
+      }
+
+      function join(asHost) {
+        socket.emit('join-room', { roomId, asHost });
+        setStatus('Joining room as ' + (asHost ? 'host' : 'guest') + '…');
+      }
+
+      startAsHostBtn.addEventListener('click', () => {
+        join(true);
+      });
+
+      startAsGuestBtn.addEventListener('click', () => {
+        join(false);
+      });
+
+      socket.on('role', (data) => {
+        role = data.role;
+        hideArt();
+        setStatus('Joined as ' + role + '.');
+
+        if (role === 'guest') {
+          socket.emit('request-sync', { roomId });
+        }
+      });
+
+      socket.on('room-error', (data) => {
+        setStatus('Error: ' + data.message);
+      });
+
+      socket.on('control', ({ action, currentTime, serverTime, playing }) => {
+        hideArt();
+        const localTime = player.currentTime();
+        const drift = Math.abs(localTime - currentTime);
+
+        if (drift > 2) {
+          isSeekingFromRemote = true;
+          player.currentTime(currentTime);
+          isSeekingFromRemote = false;
+        }
+
+        if (action === 'play') {
+          if (player.paused()) player.play();
+        } else if (action === 'pause') {
+          if (!player.paused()) player.pause();
+        } else if (action === 'seek') {
+          // seeking only; play/pause unchanged
+        }
+
+        setStatus(
+          'Synced via host: action=' +
+            action +
+            ', drift=' +
+            drift.toFixed(2) +
+            's'
+        );
+      });
+
+      socket.on('sync-state', ({ state }) => {
+        const { playing, currentTime } = state;
+        isSeekingFromRemote = true;
+        player.currentTime(currentTime);
+        isSeekingFromRemote = false;
+
+        if (playing) {
+          player.play();
+          setStatus('Synced with host, playing.');
+        } else {
+          player.pause();
+          setStatus('Synced with host, paused.');
+        }
+      });
+
+      function emitControl(action) {
+        if (role !== 'host') return;
+        const currentTime = player.currentTime();
+        socket.emit('control', { roomId, action, currentTime });
+      }
+
+      player.on('play', () => {
+        emitControl('play');
+      });
+
+      player.on('pause', () => {
+        emitControl('pause');
+      });
+
+      player.on('seeked', () => {
+        if (isSeekingFromRemote) return;
+        emitControl('seek');
+      });
+    </script>
+  </body>
+  </html>
+

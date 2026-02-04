@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>FriendWatch - Create Room</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body class="dark">
+    <div class="container">
+      <header class="header">
+        <h1>FriendWatch</h1>
+        <p>Watch a video together with a friend in perfect sync.</p>
+      </header>
+
+      <section class="card">
+        <h2>Create a Room</h2>
+        <form action="/create" method="post" enctype="multipart/form-data" class="form">
+          <label>
+            <span>Video file (MP4/WebM) *</span>
+            <input type="file" name="video" accept="video/mp4,video/webm" required />
+          </label>
+
+          <label>
+            <span>Art / Cover image *</span>
+            <input type="file" name="art" accept="image/*" required />
+          </label>
+
+          <label>
+            <span>Subtitles (.vtt or .srt, optional)</span>
+            <input type="file" name="subtitle" accept=".vtt,.srt,text/vtt" />
+          </label>
+
+          <button type="submit" class="btn-primary">Create Room</button>
+        </form>
+      </section>
+
+      <footer class="footer">
+        <small>Prototype demo &mdash; local file uploads only.</small>
+      </footer>
+    </div>
+  </body>
+  </html>
+
